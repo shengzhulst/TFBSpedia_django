@@ -1,0 +1,20 @@
+#python version: 3.13.2
+
+virtualenv TFBS_djange
+source TFBS_djange/bin/activate
+
+#`Set Up Database`
+
+```bash
+$ python manage.py makemigrations
+$ python manage.py migrate
+```
+
+#`Start the App`
+
+```bash
+$ python manage.py runserver
+```
+
+
+
