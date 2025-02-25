@@ -1,9 +1,11 @@
+{% load custom_tags %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TFBSpedia - Search Results</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -18,61 +20,59 @@
             padding: 20px;
         }
         header {
-            display: flex;
-            align-items: center;
             margin-bottom: 30px;
         }
         .logo {
             margin-right: 20px;
             font-size: 24px;
             font-weight: bold;
+            color: #6a1b9a;
         }
-        .search-form {
-            flex-grow: 1;
+        .logo a {
+            text-decoration: none;
+            color: #6a1b9a;
         }
-        #search-input {
-            width: 70%;
-            padding: 8px 12px;
-            border: 2px solid #ccc;
-            border-radius: 4px;
-            font-size: 16px;
-        }
-        #search-button {
-            background-color: #4CAF50;
-            color: white;
-            padding: 8px 16px;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 16px;
+        .search-form-container {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
         }
         .search-info {
             margin-bottom: 20px;
-            padding: 10px;
-            background-color: #f0f0f0;
-            border-radius: 4px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #6a1b9a;
         }
-        .results-container {
+        .table-container {
             background-color: white;
-            border-radius: 4px;
+            border-radius: 8px;
             padding: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            overflow-x: auto;
         }
-        .result-item {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
+        .table {
+            width: 100%;
+            margin-bottom: 0;
         }
-        .result-item:last-child {
-            border-bottom: none;
+        .table th {
+            background-color: #f0e6f6;
+            font-weight: 600;
         }
-        .result-title {
-            font-size: 18px;
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .result-details {
+        .action-button {
+            padding: 4px 10px;
+            background-color: #6a1b9a;
+            color: white;
+            border-radius: 4px;
+            text-decoration: none;
+            display: inline-block;
             font-size: 14px;
-            color: #666;
+        }
+        .action-button:hover {
+            background-color: #4a148c;
+            color: white;
         }
         .no-results {
             padding: 30px;
@@ -90,58 +90,87 @@
 </head>
 <body>
     <div class="container">
-        <header>
+        <header class="d-flex align-items-center justify-content-between">
             <div class="logo">
                 <a href="{% url 'index' %}">TFBSpedia</a>
             </div>
-            <form class="search-form" id="search-form">
-                <input type="text" id="search-input" name="query" value="{{ query }}" placeholder="Search for chromosomal location or TF name">
-                <button type="submit" id="search-button">Search</button>
-            </form>
         </header>
         
+        <div class="search-form-container">
+            <form class="row g-3" action="{% url 'search_results' %}" method="get">
+                <div class="col-md-8">
+                    <input type="text" class="form-control" id="search-input" name="query" value="{{ query }}" placeholder="Search for chromosomal location or TF name">
+                </div>
+                <div class="col-md-2">
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="species" id="human" value="human" {% if species == 'human' %}checked{% endif %}>
+                        <label class="form-check-label" for="human">Human</label>
+                    </div>
+                    <div class="form-check form-check-inline">
+                        <input class="form-check-input" type="radio" name="species" id="mouse" value="mouse" {% if species == 'mouse' %}checked{% endif %}>
+                        <label class="form-check-label" for="mouse">Mouse</label>
+                    </div>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-success w-100">Search</button>
+                </div>
+            </form>
+        </div>
+        
         <div class="search-info">
-            <h2>Search Results for "{{ query }}"</h2>
+            <h2>Search Results for "{{ query }}" in {{ species|title }} database</h2>
             <p>Found {{ results|length }} results</p>
         </div>
         
-        <div class="results-container">
-            {% if results %}
-                {% for result in results %}
-                <div class="result-item">
-                    <div class="result-title">{{ result.title }}</div>
-                    <div class="result-details">
-                        {% if result.chromosome %}
-                        <p>Chromosome: {{ result.chromosome }}, Position: {{ result.start }}-{{ result.end }}</p>
-                        {% endif %}
-                        
-                        {% if result.tf_name %}
-                        <p>Transcription Factor: {{ result.tf_name }}</p>
-                        {% endif %}
-                        
-                        <p>{{ result.description }}</p>
-                        
-                        {% if result.url %}
-                        <a href="{{ result.url }}">View details</a>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-            {% else %}
-                <div class="no-results">
-                    <p>No results found for "{{ query }}".</p>
+        {% if results %}
+            <div class="table-container">
+                <table class="table table-hover table-striped">
+                    <thead>
+                        <tr>
+                            {% for column in columns %}
+                                {% if column.key != 'actions' %}
+                                    <th>{{ column.name }}</th>
+                                {% endif %}
+                            {% endfor %}
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in results %}
+                            <tr>
+                                {% for column in columns %}
+                                    {% if column.key != 'actions' %}
+                                        <td>{{ result|get_item:column.key }}</td>
+                                    {% endif %}
+                                {% endfor %}
+                                <td>
+                                    <a href="{{ result.actions }}" class="action-button">View</a>
+                                </td>
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div class="no-results">
+                <div class="alert alert-info" role="alert">
+                    <h4 class="alert-heading">No results found!</h4>
+                    <p>No results found for "{{ query }}" in the {{ species|title }} database.</p>
+                    <hr>
                     <p>Try different keywords or check the search format:</p>
                     <ul>
                         <li>For genomic regions: chr1,10000,20000</li>
                         <li>For transcription factors: Enter TF name (e.g., FOXP3)</li>
                     </ul>
                 </div>
-            {% endif %}
-        </div>
+            </div>
+        {% endif %}
     </div>
     
     <footer>
         <p>© 2025 TFBSpedia - A Database for Transcription Factor Binding Sites</p>
     </footer>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>

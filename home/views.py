@@ -16,6 +16,7 @@ def search_results(request):
     species = request.GET.get('species', 'human')
     
     results = []
+    columns = []
     
     # Determine which database to query
     db_alias = 'human' if species == 'human' else 'mouse'
@@ -24,15 +25,16 @@ def search_results(request):
     if is_genomic_location(query):
         # Parse chromosome, start, and end positions
         chrom, start, end = parse_genomic_location(query)
-        results = search_by_location(db_alias, chrom, start, end)
+        results, columns = search_by_location(db_alias, chrom, start, end)
     else:
         # Assume it's a TF name
-        results = search_by_tf_name(db_alias, query)
+        results, columns = search_by_tf_name(db_alias, query)
     
     context = {
         'query': query,
         'species': species,
-        'results': results
+        'results': results,
+        'columns': columns
     }
     return render(request, 'pages/search_results.html', context)
 
@@ -58,45 +60,51 @@ def search_by_location(db_alias, chromosome, start, end):
             LIMIT 100
         """, [chromosome, start, end])
         
-        columns = [col[0] for col in cursor.description]
+        columns = [
+            {'name': 'ID', 'key': 'id'},
+            {'name': 'Chromosome', 'key': 'chromosome'},
+            {'name': 'Start', 'key': 'position_start'},
+            {'name': 'End', 'key': 'position_end'},
+            {'name': 'TF Name', 'key': 'tf_name'},
+            {'name': 'Score', 'key': 'score'},
+            {'name': 'Actions', 'key': 'actions'}
+        ]
+        
+        db_columns = [col[0] for col in cursor.description]
         results = []
         
         for row in cursor.fetchall():
-            result = dict(zip(columns, row))
-            result['title'] = f"{result['tf_name']} on {result['chromosome']}:{result['position_start']}-{result['position_end']}"
-            result['description'] = f"Score: {result['score']}"
-            result['url'] = f"/detail/{result['id']}/"
+            result = dict(zip(db_columns, row))
+            result['actions'] = f"/detail/{result['id']}/"
             results.append(result)
             
-    return results
+    return results, columns
 
 def search_by_tf_name(db_alias, tf_name):
     # Connect to the appropriate database
     with connections[db_alias].cursor() as cursor:
         cursor.execute("""                
             SELECT
-                "TFBS_name".*,
-                "TFBS_position".*
-            FROM
-                "TFBS_name"
-            JOIN
-                "TFBS_position"
-            ON 
-                "TFBS_name"."ID" = "TFBS_position"."ID"
-            WHERE
-                "TFBS_name"."TFBS" ILIKE %s OR "TFBS_name"."predicted_TFBS" ILIKE %s
-            LIMIT 100
+                "TFBS_position"."seqnames",
+                "TFBS_position"."start",
+                "TFBS_position"."end"
+            FROM "TFBS_name"
+            JOIN "TFBS_position"
+            ON "TFBS_name"."ID" = "TFBS_position"."ID"
+            WHERE "TFBS_name"."TFBS" ILIKE %s OR "TFBS_name"."predicted_TFBS" ILIKE %s
             """, [f'%{tf_name}%', f'%{tf_name}%'])
+        columns = [
+            {'name': 'Chromosome', 'key': 'seqnames'},
+            {'name': 'Start', 'key': 'start'},
+            {'name': 'End', 'key': 'end'},
+        ]
         
-        columns = [col[0] for col in cursor.description]
+        db_columns = [col[0] for col in cursor.description]
         results = []
         
         for row in cursor.fetchall():
-            result = dict(zip(columns, row))
-            # Adjust these field names to match your actual column names
-            result['title'] = f"{result['TFBS']} on {result['chr']}:{result['start']}-{result['end']}"
-            result['description'] = f"Score: {result.get('score', 'N/A')}"
-            result['url'] = f"/detail/{result['ID']}/"
+            result = dict(zip(db_columns, row))
+            result['actions'] = f"/detail/{result['ID']}/"
             results.append(result)
             
-    return results
+    return results, columns
