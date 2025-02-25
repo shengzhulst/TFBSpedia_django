@@ -50,6 +50,14 @@
             border-radius: 4px;
             font-size: 18px;
         }
+        .mode-switcher {
+            margin: 10px 0;
+            font-size: 16px;
+        }
+        .mode-switcher label {
+            margin-right: 20px;
+            cursor: pointer;
+        }
         #search-button {
             background-color: #4CAF50;
             color: white;
@@ -108,8 +116,16 @@
             </div>
             
             <div class="search-container">
-                <form id="search-form">
-                    <input type="text" id="search-input" placeholder="A Search bar (eg. chr1,10000,20000 or TF name)">
+                <form id="search-form" action="{% url 'search_results' %}" method="get">
+                    <input type="text" id="search-input" name="query" placeholder="A Search bar (eg. chr1,10000,20000 or TF name)">
+                    <div class="mode-switcher">
+                        <label>
+                            <input type="radio" name="species" value="human" checked> Human
+                        </label>
+                        <label>
+                            <input type="radio" name="species" value="mouse"> Mouse
+                        </label>
+                    </div>
                     <button type="submit" id="search-button">Search</button>
                 </form>
             </div>
@@ -161,13 +177,6 @@
         document.getElementById('genome-browser').addEventListener('click', function() {
             // Open in new window/tab
             window.open(document.getElementById('browser-link').getAttribute('href'), '_blank');
-        });
-        
-        document.getElementById('search-form').addEventListener('submit', function(e) {
-            e.preventDefault();
-            const searchTerm = document.getElementById('search-input').value;
-            // Redirect to search results page with the query parameter
-            window.location.href = "{% url 'search_results' %}?query=" + encodeURIComponent(searchTerm);
         });
     </script>
 </body>
