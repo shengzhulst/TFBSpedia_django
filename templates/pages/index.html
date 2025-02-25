@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TFBSpedia - Transcription Factor Binding Site Database</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f5f5f5;
+            color: #333;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            padding: 30px 0;
+        }
+        .logo-container {
+            border: 1px solid #ddd;
+            background-color: #f0f0f0;
+            padding: 40px;
+            margin: 0 auto;
+            width: 400px;
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        .search-container {
+            border: 1px solid #ddd;
+            background-color: #f0f0f0;
+            padding: 40px;
+            margin: 0 auto;
+            width: 90%;
+            text-align: center;
+            font-size: 24px;
+            margin-bottom: 30px;
+        }
+        #search-input {
+            width: 70%;
+            padding: 12px 20px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            border: 2px solid #ccc;
+            border-radius: 4px;
+            font-size: 18px;
+        }
+        #search-button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 12px 20px;
+            margin: 8px 0;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 18px;
+        }
+        #search-button:hover {
+            background-color: #45a049;
+        }
+        .examples {
+            margin: 20px 0;
+            font-size: 16px;
+            color: #666;
+        }
+        .info-boxes {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 30px;
+        }
+        .info-box {
+            border: 1px solid #ddd;
+            background-color: #f0f0f0;
+            padding: 30px;
+            width: 30%;
+            height: 250px;
+            text-align: center;
+            font-size: 20px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.3s ease;
+        }
+        .info-box:hover {
+            transform: scale(1.05);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+        footer {
+            text-align: center;
+            margin-top: 50px;
+            padding: 20px;
+            background-color: #f0f0f0;
+            color: #666;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo-container">
+                TFBSpedia icon image
+            </div>
+            
+            <div class="search-container">
+                <form id="search-form">
+                    <input type="text" id="search-input" placeholder="A Search bar (eg. chr1,10000,20000 or TF name)">
+                    <button type="submit" id="search-button">Search</button>
+                </form>
+            </div>
+            
+            <div class="examples">
+                {% for example in examples %}
+                <p>{{ example }}</p>
+                {% endfor %}
+            </div>
+        </div>
+        
+        <div class="info-boxes">
+            <div class="info-box" id="motif-info">
+                Motif information and clustering
+                <br>(a dialog with image and link to a new website)
+                <a href="{{ motif_info_url }}" style="display:none" id="motif-link">Learn more</a>
+            </div>
+            
+            <div class="info-box" id="benchmark-info">
+                Benchmark matrix information
+                <br>(a dialog with image and link to a new website)
+                <a href="{{ benchmark_url }}" style="display:none" id="benchmark-link">Learn more</a>
+            </div>
+            
+            <div class="info-box" id="genome-browser">
+                Genome browser
+                <br>(a dialog with image and link to a new website)
+                <a href="{{ genome_browser_url }}" style="display:none" id="browser-link">Learn more</a>
+            </div>
+        </div>
+    </div>
+    
+    <footer>
+        <p>© 2025 TFBSpedia - A Database for Transcription Factor Binding Sites</p>
+    </footer>
+
+    <script>
+        // Basic JavaScript for dialog functionality
+        document.getElementById('motif-info').addEventListener('click', function() {
+            // Open in new window/tab
+            window.open(document.getElementById('motif-link').getAttribute('href'), '_blank');
+        });
+        
+        document.getElementById('benchmark-info').addEventListener('click', function() {
+            // Open in new window/tab
+            window.open(document.getElementById('benchmark-link').getAttribute('href'), '_blank');
+        });
+        
+        document.getElementById('genome-browser').addEventListener('click', function() {
+            // Open in new window/tab
+            window.open(document.getElementById('browser-link').getAttribute('href'), '_blank');
+        });
+        
+        document.getElementById('search-form').addEventListener('submit', function(e) {
+            e.preventDefault();
+            const searchTerm = document.getElementById('search-input').value;
+            // Redirect to search results page with the query parameter
+            window.location.href = "{% url 'search_results' %}?query=" + encodeURIComponent(searchTerm);
+        });
+    </script>
+</body>
+</html>

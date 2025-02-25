@@ -14,6 +14,7 @@ except:
 urlpatterns = [
     path("admin/", admin.site.urls),
     path("", include("admin_soft.urls")),
+    path("", include("home.urls")),  
 ]
 
 
