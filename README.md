@@ -13,6 +13,14 @@ python-dotenv==1.0.1
 
 django-admin-soft-dashboard
 
+psycopg2-binary
+
+djangorestframework
+
+markdown 
+      
+django-filter  
+
 ## Manual Build 
 
 > Install modules via `VENV`  

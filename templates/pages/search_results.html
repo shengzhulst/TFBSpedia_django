@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TFBSpedia - Search Results</title>
     <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
+    <!-- DataTables CSS -->
+    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -52,14 +54,6 @@
             padding: 20px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             overflow-x: auto;
-        }
-        .table {
-            width: 100%;
-            margin-bottom: 0;
-        }
-        .table th {
-            background-color: #f0e6f6;
-            font-weight: 600;
         }
         .action-button {
             padding: 4px 10px;
@@ -124,7 +118,7 @@
         
         {% if results %}
             <div class="table-container">
-                <table class="table table-hover table-striped">
+                <table id="results-table" class="table table-hover table-striped">
                     <thead>
                         <tr>
                             {% for column in columns %}
@@ -171,6 +165,31 @@
         <p>© 2025 TFBSpedia - A Database for Transcription Factor Binding Sites</p>
     </footer>
 
+    <!-- Required JavaScript -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
+    <!-- DataTables JS -->
+    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    
+    <script>
+        $(document).ready(function() {
+            $('#results-table').DataTable({
+                responsive: true,
+                pageLength: 25,
+                language: {
+                    search: "Filter results:",
+                    lengthMenu: "Show _MENU_ entries per page",
+                    info: "Showing _START_ to _END_ of _TOTAL_ entries",
+                    paginate: {
+                        first: "First",
+                        last: "Last",
+                        next: "Next",
+                        previous: "Previous"
+                    }
+                }
+            });
+        });
+    </script>
 </body>
 </html>
