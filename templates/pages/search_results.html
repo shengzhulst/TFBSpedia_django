@@ -67,6 +67,7 @@
         .action-button:hover {
             background-color: #4a148c;
             color: white;
+            text-decoration: none;
         }
         .no-results {
             padding: 30px;
@@ -79,6 +80,16 @@
             padding: 20px;
             background-color: #f0f0f0;
             color: #666;
+        }
+        .loading-indicator {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100px;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
         }
     </style>
 </head>
@@ -113,48 +124,43 @@
         
         <div class="search-info">
             <h2>Search Results for "{{ query }}" in {{ species|title }} database</h2>
-            <p>Found {{ results|length }} results</p>
+            <p id="results-count">Loading results...</p>
         </div>
         
-        {% if results %}
+        {% if query %}
             <div class="table-container">
-                <table id="results-table" class="table table-hover table-striped">
+                <div id="loading-indicator" class="loading-indicator">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+                
+                <div id="error-container" class="alert alert-danger" style="display: none;"></div>
+                
+                <table id="results-table" class="table table-hover table-striped" style="width:100%; display:none;">
                     <thead>
                         <tr>
                             {% for column in columns %}
-                                {% if column.key != 'actions' %}
-                                    <th>{{ column.name }}</th>
-                                {% endif %}
+                                <th>{{ column.name }}</th>
                             {% endfor %}
                             <th>Actions</th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for result in results %}
-                            <tr>
-                                {% for column in columns %}
-                                    {% if column.key != 'actions' %}
-                                        <td>{{ result|get_item:column.key }}</td>
-                                    {% endif %}
-                                {% endfor %}
-                                <td>
-                                    <a href="{{ result.actions }}" class="action-button">View</a>
-                                </td>
-                            </tr>
-                        {% endfor %}
+                        <!-- Data will be loaded via AJAX -->
                     </tbody>
                 </table>
             </div>
         {% else %}
             <div class="no-results">
                 <div class="alert alert-info" role="alert">
-                    <h4 class="alert-heading">No results found!</h4>
-                    <p>No results found for "{{ query }}" in the {{ species|title }} database.</p>
+                    <h4 class="alert-heading">No search query entered!</h4>
+                    <p>Please enter a search query to see results.</p>
                     <hr>
-                    <p>Try different keywords or check the search format:</p>
+                    <p>You can search by:</p>
                     <ul>
-                        <li>For genomic regions: chr1,10000,20000</li>
-                        <li>For transcription factors: Enter TF name (e.g., FOXP3)</li>
+                        <li>Genomic regions: e.g., chr1,10000,20000</li>
+                        <li>Transcription factors: e.g., FOXP3</li>
                     </ul>
                 </div>
             </div>
@@ -172,11 +178,92 @@
     <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
     <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
     
+    {% if query %}
     <script>
         $(document).ready(function() {
-            $('#results-table').DataTable({
+            // Initialize csrf token for Ajax requests
+            function getCookie(name) {
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            }
+            
+            const csrftoken = getCookie('csrftoken');
+            
+            $.ajaxSetup({
+                beforeSend: function(xhr, settings) {
+                    if (!this.crossDomain) {
+                        xhr.setRequestHeader("X-CSRFToken", csrftoken);
+                    }
+                }
+            });
+            
+            // Initialize DataTable with server-side processing
+            const table = $('#results-table').DataTable({
+                processing: true,
+                serverSide: true,
                 responsive: true,
                 pageLength: 25,
+                ajax: {
+                    url: '/api/tfbs/',
+                    type: 'GET',
+                    data: function(d) {
+                        // Add custom parameters
+                        d.query = '{{ query }}';
+                        d.species = '{{ species }}';
+                    },
+                    error: function(xhr, error, thrown) {
+                        console.error('DataTables error:', error);
+                        console.error('Exception:', thrown);
+                        console.error('Response:', xhr.responseText);
+                        
+                        $('#loading-indicator').hide();
+                        $('#error-container').html(
+                            'Error loading data: ' + (thrown || 'Unknown error') + 
+                            '<br>Please try again or contact support.'
+                        ).show();
+                    },
+                    dataSrc: function(json) {
+                        if (json.error) {
+                            console.error('API returned error:', json.error);
+                            console.error('Details:', json.details);
+                            
+                            $('#loading-indicator').hide();
+                            $('#error-container').html(
+                                'Error processing request: ' + json.error + 
+                                '<br>Please try again or contact support.'
+                            ).show();
+                            
+                            return [];
+                        }
+                        
+                        // Update the count display
+                        $('#results-count').text('Found ' + json.recordsTotal + ' results');
+                        
+                        return json.data;
+                    }
+                },
+                columns: [
+                    { data: 'seqnames', defaultContent: '-' },
+                    { data: 'start', defaultContent: '-' },
+                    { data: 'end', defaultContent: '-' },
+                    { 
+                        data: 'actions',
+                        render: function(data, type, row) {
+                            return '<a href="' + (data || '#') + '" class="action-button">View</a>';
+                        },
+                        orderable: false
+                    }
+                ],
                 language: {
                     search: "Filter results:",
                     lengthMenu: "Show _MENU_ entries per page",
@@ -186,10 +273,28 @@
                         last: "Last",
                         next: "Next",
                         previous: "Previous"
-                    }
+                    },
+                    emptyTable: "No results found for your search",
+                    zeroRecords: "No matching records found"
+                },
+                initComplete: function() {
+                    // Hide loading indicator and show table
+                    $('#loading-indicator').hide();
+                    $('#results-table').show();
                 }
+            });
+            
+            // Add error handling for the DataTable
+            table.on('error.dt', function(e, settings, techNote, message) {
+                console.error('DataTable error:', message);
+                $('#loading-indicator').hide();
+                $('#error-container').html(
+                    'Error in data table: ' + message + 
+                    '<br>Please try again or contact support.'
+                ).show();
             });
         });
     </script>
+    {% endif %}
 </body>
 </html>
