@@ -3,6 +3,9 @@
 This is the Django part of the TFBSpedia database with based on the free template from [Django Soft](https://app-generator.dev/django-soft) starter provided by [Django App Generator](https://app-generator.dev/tools/django-generator/).
 
 ## Dependencies:
+
+
+
 django==4.2.8
 
 gunicorn==21.2.0
@@ -26,6 +29,7 @@ django-filter
 > Install modules via `VENV`  
 
 ```bash
+$ pip install virtualenv
 $ virtualenv env
 $ source env/bin/activate
 $ pip install -r requirements.txt
