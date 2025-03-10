@@ -141,7 +141,7 @@ def search_by_tf_name(db_alias, tf_name, request):
                 FROM "TFBS_name"
                 JOIN "TFBS_position"
                 ON "TFBS_name"."ID" = "TFBS_position"."ID"
-                WHERE "TFBS_name"."TFBS" ILIKE %s OR "TFBS_name"."predicted_TFBS" ILIKE %s
+                WHERE "TFBS_name"."TFBS" = %s OR "TFBS_name"."predicted_TFBS" = %s
             """, [f'%{tf_name}%', f'%{tf_name}%'])
             
             count = cursor.fetchone()[0]
@@ -152,18 +152,16 @@ def search_by_tf_name(db_alias, tf_name, request):
             
             # Get paginated results
             cursor.execute("""                
-                SELECT
-                    "TFBS_position"."ID" as id,
+                SELECT DISTINCT
+                    "TFBS_position"."ID",
                     "TFBS_position"."seqnames",
                     "TFBS_position"."start",
                     "TFBS_position"."end"
                 FROM "TFBS_name"
                 JOIN "TFBS_position"
                 ON "TFBS_name"."ID" = "TFBS_position"."ID"
-                WHERE "TFBS_name"."TFBS" ILIKE %s OR "TFBS_name"."predicted_TFBS" ILIKE %s
-                ORDER BY "TFBS_position"."ID"
-                OFFSET %s LIMIT %s
-            """, [f'%{tf_name}%', f'%{tf_name}%', offset, limit])
+                WHERE "TFBS_name"."TFBS" = %s OR "TFBS_name"."predicted_TFBS" = %s
+            """, [tf_name, tf_name])
             
             columns = [col[0] for col in cursor.description]
             results = [dict(zip(columns, row)) for row in cursor.fetchall()]
