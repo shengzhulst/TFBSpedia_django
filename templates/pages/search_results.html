@@ -1,13 +1,13 @@
 {% load custom_tags %}
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TFBSpedia - Search Results</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/css/bootstrap.min.css" rel="stylesheet">
-    <!-- DataTables CSS -->
-    <link href="https://cdn.datatables.net/1.11.5/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'css/dataTables.bootstrap5.min.css' %}" rel="stylesheet">
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -129,6 +129,32 @@
         
         {% if query %}
             <div class="table-container">
+                <div class="row mb-3">
+                    <div class="col-md-3">
+                        <label for="chromosome-filter" class="form-label">Filter by Chromosome:</label>
+                        <select id="chromosome-filter" class="form-select">
+                            <option value="">All Chromosomes</option>
+                            {% for i in "123456789"|make_list %}
+                                <option value="chr{{ i }}">Chromosome {{ i }}</option>
+                            {% endfor %}
+                            <option value="chr10">Chromosome 10</option>
+                            <option value="chr11">Chromosome 11</option>
+                            <option value="chr12">Chromosome 12</option>
+                            <option value="chr13">Chromosome 13</option>
+                            <option value="chr14">Chromosome 14</option>
+                            <option value="chr15">Chromosome 15</option>
+                            <option value="chr16">Chromosome 16</option>
+                            <option value="chr17">Chromosome 17</option>
+                            <option value="chr18">Chromosome 18</option>
+                            <option value="chr19">Chromosome 19</option>
+                            <option value="chr20">Chromosome 20</option>
+                            <option value="chr21">Chromosome 21</option>
+                            <option value="chr22">Chromosome 22</option>
+                            <option value="chrX">Chromosome X</option>
+                            <option value="chrY">Chromosome Y</option>
+                        </select>
+                    </div>
+                </div>
                 <div id="loading-indicator" class="loading-indicator">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
@@ -151,6 +177,7 @@
                     </tbody>
                 </table>
             </div>
+            <button id="download-btn" class="btn btn-primary">Download All Results</button>
         {% else %}
             <div class="no-results">
                 <div class="alert alert-info" role="alert">
@@ -172,15 +199,19 @@
     </footer>
 
     <!-- Required JavaScript -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.0/js/bootstrap.bundle.min.js"></script>
-    <!-- DataTables JS -->
-    <script src="https://cdn.datatables.net/1.11.5/js/jquery.dataTables.min.js"></script>
-    <script src="https://cdn.datatables.net/1.11.5/js/dataTables.bootstrap5.min.js"></script>
+    <script src="{% static 'js/jquery.min.js' %}"></script>
+    <script src="{% static 'js/bootstrap.bundle.min.js' %}"></script>
+    <script src="{% static 'js/jquery.dataTables.min.js' %}"></script>
+    <script src="{% static 'js/dataTables.bootstrap5.min.js' %}"></script>
     
     {% if query %}
     <script>
         $(document).ready(function() {
+            // Debug logging
+            console.log('Document ready');
+            console.log('jQuery version:', $.fn.jquery);
+            console.log('DataTables version:', $.fn.dataTable.version);
+            
             // Initialize csrf token for Ajax requests
             function getCookie(name) {
                 let cookieValue = null;
@@ -208,21 +239,32 @@
             });
             
             // Initialize DataTable with server-side processing
+            console.log('Initializing DataTable...');
             const table = $('#results-table').DataTable({
                 processing: true,
                 serverSide: true,
                 responsive: true,
                 pageLength: 25,
+                searching: true,
                 ajax: {
                     url: '/api/tfbs/',
                     type: 'GET',
                     data: function(d) {
-                        // Add custom parameters
+                        console.log('Ajax request data:', d);  // Debug log
                         d.query = '{{ query }}';
                         d.species = '{{ species }}';
+                        
+                        // Only send chromosome parameter if one is selected
+                        const selectedChromosome = $('#chromosome-filter').val();
+                        if (selectedChromosome) {
+                            console.log('Sending chromosome filter to server:', selectedChromosome);
+                            d.chromosome = selectedChromosome;
+                        }
+                        
+                        return d;
                     },
                     error: function(xhr, error, thrown) {
-                        console.error('DataTables error:', error);
+                        console.error('DataTables Ajax error:', error);
                         console.error('Exception:', thrown);
                         console.error('Response:', xhr.responseText);
                         
@@ -233,6 +275,7 @@
                         ).show();
                     },
                     dataSrc: function(json) {
+                        console.log('Received data from server:', json);  // Debug log
                         if (json.error) {
                             console.error('API returned error:', json.error);
                             console.error('Details:', json.details);
@@ -246,18 +289,24 @@
                             return [];
                         }
                         
-                        // Update the count display
-                        $('#results-count').text('Found ' + json.recordsTotal + ' results');
+                        // Update the count display based on whether we're filtering
+                        const selectedChromosome = $('#chromosome-filter').val();
+                        if (selectedChromosome) {
+                            $('#results-count').text('Showing ' + json.recordsFiltered + ' results for ' + selectedChromosome + ' (from ' + json.recordsTotal + ' total)');
+                        } else {
+                            $('#results-count').text('Found ' + json.recordsTotal + ' results');
+                        }
                         
                         return json.data;
                     }
                 },
                 columns: [
-                    { data: 'seqnames', defaultContent: '-' },
-                    { data: 'start', defaultContent: '-' },
-                    { data: 'end', defaultContent: '-' },
+                    { data: 'seqnames', title: 'Chromosome', defaultContent: '-' },
+                    { data: 'start', title: 'Start', defaultContent: '-' },
+                    { data: 'end', title: 'End', defaultContent: '-' },
                     { 
                         data: 'actions',
+                        title: 'Actions',
                         render: function(data, type, row) {
                             return '<a href="' + (data || '#') + '" class="action-button">View</a>';
                         },
@@ -266,6 +315,7 @@
                 ],
                 language: {
                     search: "Filter results:",
+                    searchPlaceholder: "Type to filter...",
                     lengthMenu: "Show _MENU_ entries per page",
                     info: "Showing _START_ to _END_ of _TOTAL_ entries",
                     paginate: {
@@ -278,22 +328,35 @@
                     zeroRecords: "No matching records found"
                 },
                 initComplete: function() {
+                    console.log('DataTable initialization complete');  // Debug log
+                    
                     // Hide loading indicator and show table
                     $('#loading-indicator').hide();
                     $('#results-table').show();
+                    
+                    // Add event listener to the chromosome filter
+                    $('#chromosome-filter').off('change').on('change', function() {
+                        const selectedValue = $(this).val();
+                        console.log('Chromosome filter changed to:', selectedValue);
+                        
+                        // Reload the table with the new filter
+                        // This will trigger a new server request with the chromosome parameter
+                        table.ajax.reload();
+                    });
                 }
             });
-            
-            // Add error handling for the DataTable
-            table.on('error.dt', function(e, settings, techNote, message) {
-                console.error('DataTable error:', message);
-                $('#loading-indicator').hide();
-                $('#error-container').html(
-                    'Error in data table: ' + message + 
-                    '<br>Please try again or contact support.'
-                ).show();
-            });
         });
+    </script>
+    <script>
+    document.getElementById('download-btn').addEventListener('click', function() {
+        const params = new URLSearchParams();
+        params.append('query', document.getElementById('search-input') ? document.getElementById('search-input').value : '');
+        const species = document.querySelector('input[name="species"]:checked') ? document.querySelector('input[name="species"]:checked').value : 'human';
+        params.append('species', species);
+        const chromosome = document.getElementById('chromosome-filter') ? document.getElementById('chromosome-filter').value : '';
+        if (chromosome) params.append('chromosome', chromosome);
+        window.location.href = '/api/tfbs/download/?' + params.toString();
+    });
     </script>
     {% endif %}
 </body>

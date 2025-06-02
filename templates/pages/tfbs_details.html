@@ -1,0 +1,73 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TFBSpedia - TFBS Details</title>
+    <link href="{% static 'css/bootstrap.min.css' %}" rel="stylesheet">
+    <style>
+        body { background-color: #f5f5f5; color: #333; }
+        .container { max-width: 1000px; margin: 0 auto; padding: 20px; }
+        .section { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
+        .section-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 16px; color: #6a1b9a; }
+        .score-bar { height: 24px; border-radius: 12px; background: linear-gradient(90deg, #1976d2, #e53935); margin-bottom: 8px; }
+        .score-label { font-weight: 500; margin-bottom: 4px; }
+        .table thead { background: #6a1b9a; color: #fff; }
+        .table td, .table th { vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="mb-4">
+            <h1 class="section-title">TFBS Region Details</h1>
+        </header>
+        <div class="section mb-4">
+            <div class="row mb-2">
+                <div class="col-md-4"><strong>Chr:</strong> <span id="chr-val">chr1</span></div>
+                <div class="col-md-4"><strong>Start:</strong> <span id="start-val">10000</span></div>
+                <div class="col-md-4"><strong>End:</strong> <span id="end-val">20000</span></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-6"><strong>Cell/Tissue:</strong> <span id="cell-val">Tissue:xxx</span></div>
+                <div class="col-md-6"><strong>TF Name:</strong> <span id="tf-name-val">FOXP3</span></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-6"><strong>Predicted TF Name:</strong> <span id="pred-tf-name-val">FOXP3</span></div>
+            </div>
+            <div class="row mb-2">
+                <div class="col-md-12">
+                    <div class="score-label">Confident Score</div>
+                    <div class="score-bar" id="confident-score-bar"></div>
+                </div>
+                <div class="col-md-12">
+                    <div class="score-label">Important Score</div>
+                    <div class="score-bar" id="important-score-bar"></div>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-md-12 text-muted" style="font-size:0.95em;">
+                    <em>Those are heatmap bars from blue to red and indicate the scores</em>
+                </div>
+            </div>
+        </div>
+        <div class="section">
+            <div class="section-title">Overlap Annotations</div>
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Overlap annotations</th>
+                        <th>Chr</th>
+                        <th>Start</th>
+                        <th>End</th>
+                        <th>Extra (cell ID, TF name...)</th>
+                    </tr>
+                </thead>
+                <tbody id="overlap-annotations-body">
+                    <!-- Data rows will be inserted here -->
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html> 

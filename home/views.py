@@ -5,6 +5,8 @@ import re, traceback
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .serializers import TFBSSerializer
+import csv
+from django.http import HttpResponse
 
 def index(request):
     context = {
@@ -28,6 +30,7 @@ def search_results(request):
             {'name': 'Chromosome', 'key': 'seqnames'},
             {'name': 'Start', 'key': 'start'},
             {'name': 'End', 'key': 'end'},
+            
             # {'name': 'TF Name', 'key': 'tf_name'},
             # {'name': 'Score', 'key': 'score'}
         ]
@@ -85,89 +88,181 @@ class TFBSViewSet(viewsets.ViewSet):
                 'details': error_details if settings.DEBUG else "See server logs for details"
             }, status=status.HTTP_200_OK)  # Return 200 so DataTables can display the error
 
+def download_results(request):
+    query = request.GET.get('query', '')
+    species = request.GET.get('species', 'human')
+    chromosome = request.GET.get('chromosome', '')
+
+    db_alias = 'human' if species == 'human' else 'mouse'
+
+    # Use your existing search logic, but fetch ALL results (no pagination)
+    if is_genomic_location(query):
+        chrom, start, end = parse_genomic_location(query)
+        results, _ = search_by_location(db_alias, chrom, start, end, request, no_pagination=True)
+    else:
+        results, _ = search_by_tf_name(db_alias, query, request, no_pagination=True)
+
+    # Optionally filter by chromosome
+    if chromosome:
+        results = [r for r in results if r.get('seqnames') == chromosome or r.get('chromosome') == chromosome]
+
+    # Create CSV response
+    response = HttpResponse(content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="search_results.csv"'
+    writer = csv.writer(response)
+    if results:
+        writer.writerow(results[0].keys())  # header
+        for row in results:
+            writer.writerow(row.values())
+    return response
+
+def tfbs_details(request, pk):
+    # Placeholder view for TFBS details page
+    return render(request, 'pages/tfbs_details.html', {})
+
 # Helper functions
 def is_genomic_location(query):
+    # Check for full genomic location (chrN,start,end)
     pattern = r'^chr\d+,\d+,\d+$'
-    return bool(re.match(pattern, query))
+    if bool(re.match(pattern, query)):
+        return True
+    # Check for chromosome-only query (chrN)
+    pattern_chr = r'^chr\d+$'
+    return bool(re.match(pattern_chr, query))
 
 def parse_genomic_location(query):
-    parts = query.split(',')
-    chromosome = parts[0]
-    start = int(parts[1])
-    end = int(parts[2])
-    return chromosome, start, end
+    if ',' in query:
+        parts = query.split(',')
+        chromosome = parts[0]
+        start = int(parts[1])
+        end = int(parts[2])
+        return chromosome, start, end
+    else:
+        # For chromosome-only queries
+        return query, None, None
 
-def search_by_location(db_alias, chromosome, start, end, request):
+def search_by_location(db_alias, chromosome, start, end, request, no_pagination=False):
     try:
         with connections[db_alias].cursor() as cursor:
-            # First get a count of total matching records
-            cursor.execute("""
-                SELECT COUNT(*) 
-                FROM binding_sites 
-                WHERE chromosome = %s AND position_start >= %s AND position_end <= %s
-            """, [chromosome, start, end])
-            
-            count = cursor.fetchone()[0]
-            
-            # Handle pagination
-            offset = int(request.query_params.get('start', 0))
-            limit = int(request.query_params.get('length', 25))
-            
-            # Get paginated results
-            cursor.execute("""
-                SELECT id, chromosome as seqnames, position_start as start, position_end as end, 
-                       tf_name, score 
-                FROM binding_sites 
-                WHERE chromosome = %s AND position_start >= %s AND position_end <= %s
-                ORDER BY position_start
-                OFFSET %s LIMIT %s
-            """, [chromosome, start, end, offset, limit])
-            
+            if not no_pagination:
+                # Use DRF or Django request for pagination
+                offset = int(getattr(request, 'query_params', request.GET).get('start', 0))
+                limit = int(getattr(request, 'query_params', request.GET).get('length', 25))
+            # Chromosome-only search
+            if start is None or end is None:
+                # COUNT
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM "TFBS_position"
+                    WHERE "seqnames" = %s
+                """, [chromosome])
+                count = cursor.fetchone()[0]
+                # DATA
+                if no_pagination:
+                    cursor.execute("""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" = %s
+                        ORDER BY "start"
+                    """, [chromosome])
+                else:
+                    cursor.execute("""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" = %s
+                        ORDER BY "start"
+                        OFFSET %s LIMIT %s
+                    """, [chromosome, offset, limit])
+            else:
+                # Genomic region search
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM "TFBS_position"
+                    WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
+                """, [chromosome, start, end])
+                count = cursor.fetchone()[0]
+                if no_pagination:
+                    cursor.execute("""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
+                        ORDER BY "start"
+                    """, [chromosome, start, end])
+                else:
+                    cursor.execute("""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
+                        ORDER BY "start"
+                        OFFSET %s LIMIT %s
+                    """, [chromosome, start, end, offset, limit])
             columns = [col[0] for col in cursor.description]
-            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
+            raw_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            seen = set()
+            results = []
+            for row in raw_results:
+                key = (row['seqnames'], row['start'], row['end'])
+                if key not in seen:
+                    seen.add(key)
+                    results.append(row)
             return results, count
     except Exception as e:
         print(f"Database error in search_by_location: {str(e)}")
-        # Re-raise to be caught by the main try/except block
         raise
 
-def search_by_tf_name(db_alias, tf_name, request):
+def search_by_tf_name(db_alias, tf_name, request, no_pagination=False):
     try:
         with connections[db_alias].cursor() as cursor:
-            # First get a count of total matching records
             cursor.execute("""
-                SELECT COUNT(*)
-                FROM "TFBS_name"
-                JOIN "TFBS_position"
-                ON "TFBS_name"."ID" = "TFBS_position"."ID"
-                WHERE "TFBS_name"."TFBS" = %s OR "TFBS_name"."predicted_TFBS" = %s
-            """, [f'%{tf_name}%', f'%{tf_name}%'])
-            
-            count = cursor.fetchone()[0]
-            
-            # Handle pagination
-            offset = int(request.query_params.get('start', 0))
-            limit = int(request.query_params.get('length', 25))
-            
-            # Get paginated results
-            cursor.execute("""                
-                SELECT DISTINCT
-                    "TFBS_position"."ID",
-                    "TFBS_position"."seqnames",
-                    "TFBS_position"."start",
-                    "TFBS_position"."end"
-                FROM "TFBS_name"
-                JOIN "TFBS_position"
-                ON "TFBS_name"."ID" = "TFBS_position"."ID"
-                WHERE "TFBS_name"."TFBS" = %s OR "TFBS_name"."predicted_TFBS" = %s
-            """, [tf_name, tf_name])
-            
+                SELECT all_count, tfbs_count, predicted_tfbs_count
+                FROM tfbs_name_counts
+                WHERE tfbs = %s
+            """, [tf_name])
+            count_info = cursor.fetchone()
+            all_count = count_info[0] if count_info else 0
+            if no_pagination:
+                cursor.execute("""
+                    SELECT DISTINCT
+                        p."ID",
+                        p."seqnames",
+                        p."start",
+                        p."end"
+                    FROM "TFBS_position" p
+                    WHERE EXISTS (
+                        SELECT 1 
+                        FROM "TFBS_name" n 
+                        WHERE n."ID" = p."ID" 
+                        AND (n."TFBS" = %s OR n."predicted_TFBS" = %s)
+                    )
+                """, [tf_name, tf_name])
+            else:
+                offset = int(request.query_params.get('start', 0))
+                limit = int(request.query_params.get('length', 25))
+                cursor.execute("""
+                    SELECT DISTINCT
+                        p."ID",
+                        p."seqnames",
+                        p."start",
+                        p."end"
+                    FROM "TFBS_position" p
+                    WHERE EXISTS (
+                        SELECT 1 
+                        FROM "TFBS_name" n 
+                        WHERE n."ID" = p."ID" 
+                        AND (n."TFBS" = %s OR n."predicted_TFBS" = %s)
+                    )
+                    OFFSET %s LIMIT %s
+                """, [tf_name, tf_name, offset, limit])
             columns = [col[0] for col in cursor.description]
-            results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-            
-            return results, count
+            raw_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+            seen = set()
+            results = []
+            for row in raw_results:
+                key = (row['seqnames'], row['start'], row['end'])
+                if key not in seen:
+                    seen.add(key)
+                    results.append(row)
+            return results, all_count
     except Exception as e:
         print(f"Database error in search_by_tf_name: {str(e)}")
-        # Re-raise to be caught by the main try/except block
         raise

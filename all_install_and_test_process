@@ -25,8 +25,8 @@ psql -U postgres -d tfbspedia_mouse -f /Users/shitingli/Downloads/mouse_TFBS.sql
 #`Set Up Database`
 
 ```bash
-$ python manage.py makemigrations
-$ python manage.py migrate
+python manage.py makemigrations
+python manage.py migrate
 ```
 
 #`Start the App`
