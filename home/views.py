@@ -64,7 +64,8 @@ class TFBSViewSet(viewsets.ViewSet):
             
             # Add action links to each result (if results aren't empty)
             for result in results:
-                result['actions'] = f"/tfbs-details/{result.get('id', 0)}/"
+                print("Setting actions for ID:", result.get('ID'))  # Debug
+                result['actions'] = f"/tfbs-details/{result['ID']}/?species={species}"
             
             # Format response for DataTables
             return Response({
@@ -116,9 +117,124 @@ def download_results(request):
             writer.writerow(row.values())
     return response
 
+def gather_tfbs_names(pk, species='human'):
+    """
+    Fetch TFBS and predicted_TFBS for a given TFBS region (by pk) from the TFBS_name table.
+    Returns a dictionary with comma-separated strings of TFBS and predicted_TFBS values.
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    from django.db import connections
+    with connections[db_alias].cursor() as cursor:
+        cursor.execute('''
+            SELECT "TFBS", "predicted_TFBS"
+            FROM "TFBS_name"
+            WHERE "ID" = %s
+        ''', [pk])
+        rows = cursor.fetchall()
+        
+# Initialize lists to store non-None values
+        tfbs_values = []
+        predicted_tfbs_values = []
+        
+        # Process each row
+        for row in rows:
+            tfbs, predicted_tfbs = row
+            if tfbs is not None:
+                tfbs_values.append(tfbs)
+            if predicted_tfbs is not None:
+                predicted_tfbs_values.append(predicted_tfbs)
+        
+        # Convert lists to comma-separated strings, or None if empty
+        return {
+            'tfbs': ', '.join(tfbs_values) if tfbs_values else None,
+            'predicted_tfbs': ', '.join(predicted_tfbs_values) if predicted_tfbs_values else None
+        }
+
+def gather_source_info(pk, species='human'):
+    """
+    Fetch cell/tissue information for a given TFBS region (by pk) from the TFBS_source table.
+    Returns a dictionary with cell/tissue information from the single cell_tissue column.
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    from django.db import connections
+    with connections[db_alias].cursor() as cursor:
+        cursor.execute('''
+            SELECT "cell_tissue"
+        FROM "TFBS_cell_or_tissue"
+            WHERE "ID" = %s
+        ''', [pk])
+        rows = cursor.fetchall()
+        
+        # Initialize set to store unique values
+        cell_tissue_values = set()
+        
+        # Process each row
+        for row in rows:
+            cell_tissue = row[0]
+            if cell_tissue is not None:
+                cell_tissue_values.add(cell_tissue)
+        
+        # Join all unique values with commas
+        return {
+            'cell_tissue_info': ', '.join(sorted(cell_tissue_values)) if cell_tissue_values else None
+        }
+
+def gather_scores(pk, species='human'):
+    """
+    Fetch confident and important scores for a given TFBS region (by pk) from their respective tables.
+    Returns a dictionary with both scores.
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    from django.db import connections
+    with connections[db_alias].cursor() as cursor:
+        # Get confident score
+        cursor.execute('''
+            SELECT "confident_score"
+            FROM "tfbs_confident_score"
+            WHERE "id" = %s
+        ''', [pk])
+        confident_score = cursor.fetchall()
+        
+        # Get important score
+        cursor.execute('''
+            SELECT "importance_score"
+            FROM "tfbs_importance_score"
+            WHERE "id" = %s
+        ''', [pk])
+        important_score = cursor.fetchall()
+        print(important_score)
+        return {
+            'confident_score': confident_score if confident_score and confident_score[0] is not None else None,
+            'important_score': important_score if important_score and important_score[0] is not None else None
+        }
+
 def tfbs_details(request, pk):
-    # Placeholder view for TFBS details page
-    return render(request, 'pages/tfbs_details.html', {})
+    species = request.GET.get('species', 'human')
+    region_info = gather_information_chr_start_end(pk, species)
+    tfbs_info = gather_tfbs_names(pk, species)
+    source_info = gather_source_info(pk, species)
+    scores_info = gather_scores(pk, species)
+    context = {**region_info, **tfbs_info, **source_info, **scores_info}
+    return render(request, 'pages/tfbs_details.html', context)
+
+def gather_information_chr_start_end(pk, species='human'):
+    """
+    Fetch Chr, Start, and End for a given TFBS region (by pk) from the TFBS_position table.
+    Returns a dictionary: {'chr': ..., 'start': ..., 'end': ...}
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    from django.db import connections
+    with connections[db_alias].cursor() as cursor:
+        cursor.execute('''
+            SELECT "seqnames", "start", "end"
+            FROM "TFBS_position"
+            WHERE "ID" = %s
+        ''', [pk])
+        row = cursor.fetchone()
+        if row:
+            return {'chr': row[0], 'start': row[1], 'end': row[2]}
+        else:
+            return {'chr': None, 'start': None, 'end': None}
 
 # Helper functions
 def is_genomic_location(query):

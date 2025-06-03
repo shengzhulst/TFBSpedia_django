@@ -12,9 +12,29 @@
         .section { background: #fff; border-radius: 8px; padding: 24px; margin-bottom: 24px; box-shadow: 0 1px 3px rgba(0,0,0,0.07); }
         .section-title { font-size: 1.3rem; font-weight: bold; margin-bottom: 16px; color: #6a1b9a; }
         .score-bar { height: 24px; border-radius: 12px; background: linear-gradient(90deg, #1976d2, #e53935); margin-bottom: 8px; }
-        .score-label { font-weight: 500; margin-bottom: 4px; }
+        .score-label {
+            margin-bottom: 1.2rem;
+        }
+        .score-marker {
+            position: absolute;
+            top: -20px;
+            transform: translateX(-50%);
+            color: #00ff00;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.5);
+        }
+        .score-value {
+            font-size: 0.9em;
+            color: #666;
+            font-weight: 500;
+        }
         .table thead { background: #6a1b9a; color: #fff; }
         .table td, .table th { vertical-align: middle; }
+        .position-relative {
+            position: relative;
+            margin-bottom: 20px;
+        }
     </style>
 </head>
 <body>
@@ -24,30 +44,54 @@
         </header>
         <div class="section mb-4">
             <div class="row mb-2">
-                <div class="col-md-4"><strong>Chr:</strong> <span id="chr-val">chr1</span></div>
-                <div class="col-md-4"><strong>Start:</strong> <span id="start-val">10000</span></div>
-                <div class="col-md-4"><strong>End:</strong> <span id="end-val">20000</span></div>
+                <div class="col-md-4"><strong>Chr:</strong> <span id="chr-val">{{ chr }}</span></div>
+                <div class="col-md-4"><strong>Start:</strong> <span id="start-val">{{ start }}</span></div>
+                <div class="col-md-4"><strong>End:</strong> <span id="end-val">{{ end }}</span></div>
+            </div>
+            <hr class="my-3">
+            <div class="row mb-2">
+                <div class="col-md-12"><strong>Cell/Tissue:</strong> <span id="cell-val">{{ cell_tissue_info|default:"-" }}</span></div>
+            </div>
+            <hr class="my-3">
+            <div class="row mb-2">
+                <div class="col-md-12"><strong>TF Name:</strong> <span id="tf-name-val">{{ tfbs|default:"-" }}</span></div>
             </div>
             <div class="row mb-2">
-                <div class="col-md-6"><strong>Cell/Tissue:</strong> <span id="cell-val">Tissue:xxx</span></div>
-                <div class="col-md-6"><strong>TF Name:</strong> <span id="tf-name-val">FOXP3</span></div>
+                <div class="col-md-12"><strong>Predicted TF Name:</strong> <span id="pred-tf-name-val">{{ predicted_tfbs|default:"-" }}</span></div>
             </div>
-            <div class="row mb-2">
-                <div class="col-md-6"><strong>Predicted TF Name:</strong> <span id="pred-tf-name-val">FOXP3</span></div>
-            </div>
+            <hr class="my-3">
             <div class="row mb-2">
                 <div class="col-md-12">
-                    <div class="score-label">Confident Score</div>
-                    <div class="score-bar" id="confident-score-bar"></div>
+                    <div class="score-label">Confident Score (max: 8)</div>
+                    <div class="position-relative">
+                        <div class="score-bar" id="confident-score-bar"></div>
+                        {% if confident_score %}
+                        <div class="score-marker" style="left: calc({{ confident_score.0.0|default:0 }} * 12.5%);">▼</div>
+                        {% endif %}
+                        <div class="score-value text-center mt-1">
+                            {% if confident_score %}
+                            Score: {{ confident_score.0.0|floatformat:2 }}
+                            {% else %}
+                            Score: -
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
                 <div class="col-md-12">
-                    <div class="score-label">Important Score</div>
-                    <div class="score-bar" id="important-score-bar"></div>
-                </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-md-12 text-muted" style="font-size:0.95em;">
-                    <em>Those are heatmap bars from blue to red and indicate the scores</em>
+                    <div class="score-label">Important Score (max: 7)</div>
+                    <div class="position-relative">
+                        <div class="score-bar" id="important-score-bar"></div>
+                        {% if important_score %}
+                        <div class="score-marker" style="left: calc({{ important_score.0.0|default:0 }} * 14.28%);">▼</div>
+                        {% endif %}
+                        <div class="score-value text-center mt-1">
+                            {% if important_score %}
+                            Score: {{ important_score.0.0|floatformat:2 }}
+                            {% else %}
+                            Score: -
+                            {% endif %}
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
