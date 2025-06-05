@@ -40,7 +40,11 @@
 <body>
     <div class="container">
         <header class="mb-4">
-            <h1 class="section-title">TFBS Region Details</h1>
+            <h1 class="section-title">
+                <a href="javascript:history.back()" style="color: inherit; text-decoration: none;">
+                    TFBS Region Details
+                </a>
+            </h1>
         </header>
         <div class="section mb-4">
             <div class="row mb-2">
@@ -62,7 +66,12 @@
             <hr class="my-3">
             <div class="row mb-2">
                 <div class="col-md-12">
-                    <div class="score-label">Confident Score (max: 8)</div>
+                    <div class="score-label">
+                        Confident Score (max: 8)
+                        <a href="{% url 'evaluation_metrics' %}" class="btn btn-sm btn-outline-secondary ms-2" target="_blank">
+                            Learn more about scores
+                        </a>
+                    </div>
                     <div class="position-relative">
                         <div class="score-bar" id="confident-score-bar"></div>
                         {% if confident_score %}
@@ -97,21 +106,69 @@
         </div>
         <div class="section">
             <div class="section-title">Overlap Annotations</div>
-            <table class="table table-striped">
+            <button id="download-annotations-btn" class="btn btn-primary mb-3">Download Overlap Annotations</button>
+            <table class="table table-bordered table-hover">
                 <thead>
                     <tr>
-                        <th>Overlap annotations</th>
+                        <th>Type</th>
                         <th>Chr</th>
                         <th>Start</th>
                         <th>End</th>
-                        <th>Extra (cell ID, TF name...)</th>
+                        <th>Extra Information</th>
                     </tr>
                 </thead>
-                <tbody id="overlap-annotations-body">
-                    <!-- Data rows will be inserted here -->
+                <tbody>
+                    {% if overlap_annotations %}
+                        {% for annotation in overlap_annotations %}
+                            <tr>
+                                <td>{{ annotation.type }}</td>
+                                <td>{{ annotation.chr }}</td>
+                                <td>{{ annotation.start }}</td>
+                                <td>{{ annotation.end }}</td>
+                                <td>{{ annotation.extra_info }}</td>
+                            </tr>
+                        {% endfor %}
+                    {% else %}
+                        <tr><td colspan="5" class="text-center">No overlap annotations found for this region.</td></tr>
+                    {% endif %}
                 </tbody>
             </table>
         </div>
     </div>
+
+    <script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const downloadBtn = document.getElementById('download-annotations-btn');
+        if (downloadBtn) {
+            downloadBtn.addEventListener('click', function() {
+                const table = downloadBtn.nextElementSibling;
+                let csv = '';
+                // Get headers
+                const headers = table.querySelectorAll('thead th');
+                let headerRow = [];
+                headers.forEach(th => headerRow.push('"' + th.innerText.replace(/"/g, '""') + '"'));
+                csv += headerRow.join(',') + '\n';
+                // Get rows
+                const rows = table.querySelectorAll('tbody tr');
+                rows.forEach(tr => {
+                    const cells = tr.querySelectorAll('td');
+                    let row = [];
+                    cells.forEach(td => row.push('"' + td.innerText.replace(/"/g, '""') + '"'));
+                    csv += row.join(',') + '\n';
+                });
+                // Download
+                const blob = new Blob([csv], { type: 'text/csv' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'overlap_annotations.csv';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+    });
+    </script>
 </body>
 </html> 

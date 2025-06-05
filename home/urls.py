@@ -11,5 +11,6 @@ urlpatterns = [
     path('search/', views.search_results, name='search_results'),
     path('api/tfbs/download/', views.download_results, name='download_results'),
     path('tfbs-details/<int:pk>/', views.tfbs_details, name='tfbs_details'),
+    path('evaluation-metrics/', views.evaluation_metrics, name='evaluation_metrics'),
     path('', include(router.urls)),
 ]

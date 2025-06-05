@@ -145,9 +145,10 @@
             </div>
             
             <div class="info-box" id="benchmark-info">
-                Benchmark matrix information
-                <br>(a dialog with image and link to a new website)
-                <a href="{{ benchmark_url }}" style="display:none" id="benchmark-link">Learn more</a>
+                <a href="{% url 'evaluation_metrics' %}" style="text-decoration: none; color: inherit;">
+                    Benchmark matrix information
+                    <br>(a dialog with image and link to a new website)
+                </a>
             </div>
             
             <div class="info-box" id="genome-browser">
@@ -167,11 +168,6 @@
         document.getElementById('motif-info').addEventListener('click', function() {
             // Open in new window/tab
             window.open(document.getElementById('motif-link').getAttribute('href'), '_blank');
-        });
-        
-        document.getElementById('benchmark-info').addEventListener('click', function() {
-            // Open in new window/tab
-            window.open(document.getElementById('benchmark-link').getAttribute('href'), '_blank');
         });
         
         document.getElementById('genome-browser').addEventListener('click', function() {

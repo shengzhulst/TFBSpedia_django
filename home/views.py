@@ -208,13 +208,220 @@ def gather_scores(pk, species='human'):
             'important_score': important_score if important_score and important_score[0] is not None else None
         }
 
+def get_overlap_annotations(tfbs_id, species='human'):
+    """
+    Fetch all overlap annotation information for a given TFBS region (by pk) from various annotation tables.
+    Returns a list of dictionaries containing annotation information.
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    from django.db import connections
+    overlap_annotations = []
+    print(db_alias)
+    with connections[db_alias].cursor() as cursor:
+        # 1. Get Enhancer information
+        cursor.execute('''
+            SELECT e."seqnames", e."start", e."end"
+            FROM "TFBS_to_enhancer" te
+            JOIN "Enhancer_GB" e ON te."enhancer_ID" = e."enhancer_ID"
+            WHERE te."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'Enhancer',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ''
+            })
+
+        # 2. Get Promoter information
+        cursor.execute('''
+            SELECT p."seqnames", p."start", p."end"
+            FROM "TFBS_to_promoter" tp
+            JOIN "Promoter" p ON tp."promoter_ID" = p."promoter_ID"
+            WHERE tp."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'Promoter',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ''
+            })
+
+        # 3. Get Histone information
+        cursor.execute('''
+            SELECT h."seqnames", h."start", h."end", h."histone"
+            FROM "TFBS_to_histone" th
+            JOIN "histone" h ON th."histone_ID" = h."histone_ID"
+            WHERE th."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'Histone',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': row[3] if row[3] else ''
+            })
+
+        # 4. Get cCREs information
+        cursor.execute('''
+            SELECT c."seqnames", c."start", c."end"
+            FROM "TFBS_to_cCREs" tc
+            JOIN "cCREs" c ON tc."cCREs_ID" = c."cCREs_ID"
+            WHERE tc."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'cCREs',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ''
+            })
+
+        # 5. Get rE2G information
+        cursor.execute('''
+            SELECT r."seqnames", r."start", r."end", r."gene"
+            FROM "TFBS_to_rE2G" tr
+            JOIN "rE2G" r ON tr."rE2G_ID" = r."rE2G_ID"
+            WHERE tr."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'rE2G',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': row[3] if row[3] else ''
+            })
+
+        # 6. Get TE information
+        cursor.execute('''
+            SELECT t."seqnames", t."start", t."end"
+            FROM "TFBS_to_TE" tt
+            JOIN "TE" t ON tt."TE_ID" = t."TE_ID"
+            WHERE tt."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'TE',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ''
+            })
+
+        # 7. Get GWAS information
+        cursor.execute('''
+            SELECT g."seqnames", g."start", g."end", g."rs_ID"
+            FROM "TFBS_to_GWAS" tg
+            JOIN "GWAS" g ON tg."GWAS_ID" = g."GWAS_ID"
+            WHERE tg."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'GWAS',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': row[3] if row[3] else ''
+            })
+
+        # 8. Get eQTL information
+        cursor.execute('''
+            SELECT e."seqnames", e."start", e."end", e."tissue"
+            FROM "TFBS_to_eQTL" te
+            JOIN "eQTL" e ON te."eQTL_ID" = e."eQTL_ID"
+            WHERE te."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            extra_info = []
+            if row[3]: extra_info.append(f"tissue: {row[3]}")
+            overlap_annotations.append({
+                'type': 'eQTL',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ', '.join(extra_info)
+            })
+
+        # 9. Get Blacklist information
+        cursor.execute('''
+            SELECT b."seqnames", b."start", b."end"
+            FROM "TFBS_to_blacklist" tb
+            JOIN "blacklist" b ON tb."blacklist_ID" = b."blacklist_ID"
+            WHERE tb."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'Blacklist',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ''
+            })
+
+        # 10. Get Cookbook_ChIP information
+        cursor.execute('''
+            SELECT c."seqnames", c."start", c."end", c."TF_name"
+            FROM "TFBS_to_Cookbook_ChIP" tc
+            JOIN "Cookbook_ChIP" c ON tc."Cookbook_ChIP_ID" = c."Cookbook_ChIP_ID"
+            WHERE tc."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'Cookbook_ChIP',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': row[3] if row[3] else ''
+            })
+
+        # 11. Get Cookbook_GHT_SELEX information
+        cursor.execute('''
+            SELECT c."seqnames", c."start", c."end", c."TF_name"
+            FROM "TFBS_to_Cookbook_GHT_SELEX" tc
+            JOIN "Cookbook_GHT_SELEX" c ON tc."Cookbook_GHT_SELEX_ID" = c."Cookbook_GHT_SELEX_ID"
+            WHERE tc."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'Cookbook_GHT_SELEX',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': row[3] if row[3] else ''
+            })
+
+        # 12. Get variable_CpG information
+        cursor.execute('''
+            SELECT v."seqnames", v."start", v."end"
+            FROM "TFBS_to_variable_CpG" tv
+            JOIN "variable_CpG" v ON tv."variable_CpG_ID" = v."variable_CpG_ID"
+            WHERE tv."ID" = %s
+        ''', [tfbs_id])
+        for row in cursor.fetchall():
+            overlap_annotations.append({
+                'type': 'variable_CpG',
+                'chr': row[0],
+                'start': row[1],
+                'end': row[2],
+                'extra': ''
+            })
+        print(overlap_annotations)
+    return overlap_annotations
+
 def tfbs_details(request, pk):
     species = request.GET.get('species', 'human')
     region_info = gather_information_chr_start_end(pk, species)
     tfbs_info = gather_tfbs_names(pk, species)
     source_info = gather_source_info(pk, species)
     scores_info = gather_scores(pk, species)
-    context = {**region_info, **tfbs_info, **source_info, **scores_info}
+    overlap_annotations = get_overlap_annotations(pk, species)
+    context = {**region_info, **tfbs_info, **source_info, **scores_info, 'overlap_annotations': overlap_annotations}
     return render(request, 'pages/tfbs_details.html', context)
 
 def gather_information_chr_start_end(pk, species='human'):
@@ -305,7 +512,7 @@ def search_by_location(db_alias, chromosome, start, end, request, no_pagination=
                         ORDER BY "start"
                     """, [chromosome, start, end])
                 else:
-                    cursor.execute("""
+                        cursor.execute("""
                         SELECT "ID", "seqnames", "start", "end"
                         FROM "TFBS_position"
                         WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
@@ -382,3 +589,9 @@ def search_by_tf_name(db_alias, tf_name, request, no_pagination=False):
     except Exception as e:
         print(f"Database error in search_by_tf_name: {str(e)}")
         raise
+
+def evaluation_metrics(request):
+    """
+    View function for the evaluation metrics explanation page.
+    """
+    return render(request, 'pages/evaluation_metrics.html')

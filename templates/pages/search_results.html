@@ -129,32 +129,6 @@
         
         {% if query %}
             <div class="table-container">
-                <div class="row mb-3">
-                    <div class="col-md-3">
-                        <label for="chromosome-filter" class="form-label">Filter by Chromosome:</label>
-                        <select id="chromosome-filter" class="form-select">
-                            <option value="">All Chromosomes</option>
-                            {% for i in "123456789"|make_list %}
-                                <option value="chr{{ i }}">Chromosome {{ i }}</option>
-                            {% endfor %}
-                            <option value="chr10">Chromosome 10</option>
-                            <option value="chr11">Chromosome 11</option>
-                            <option value="chr12">Chromosome 12</option>
-                            <option value="chr13">Chromosome 13</option>
-                            <option value="chr14">Chromosome 14</option>
-                            <option value="chr15">Chromosome 15</option>
-                            <option value="chr16">Chromosome 16</option>
-                            <option value="chr17">Chromosome 17</option>
-                            <option value="chr18">Chromosome 18</option>
-                            <option value="chr19">Chromosome 19</option>
-                            <option value="chr20">Chromosome 20</option>
-                            <option value="chr21">Chromosome 21</option>
-                            <option value="chr22">Chromosome 22</option>
-                            <option value="chrX">Chromosome X</option>
-                            <option value="chrY">Chromosome Y</option>
-                        </select>
-                    </div>
-                </div>
                 <div id="loading-indicator" class="loading-indicator">
                     <div class="spinner-border text-primary" role="status">
                         <span class="visually-hidden">Loading...</span>
@@ -245,7 +219,7 @@
                 serverSide: true,
                 responsive: true,
                 pageLength: 25,
-                searching: true,
+                searching: false,
                 ajax: {
                     url: '/api/tfbs/',
                     type: 'GET',
@@ -253,14 +227,6 @@
                         console.log('Ajax request data:', d);  // Debug log
                         d.query = '{{ query }}';
                         d.species = '{{ species }}';
-                        
-                        // Only send chromosome parameter if one is selected
-                        const selectedChromosome = $('#chromosome-filter').val();
-                        if (selectedChromosome) {
-                            console.log('Sending chromosome filter to server:', selectedChromosome);
-                            d.chromosome = selectedChromosome;
-                        }
-                        
                         return d;
                     },
                     error: function(xhr, error, thrown) {
@@ -289,14 +255,7 @@
                             return [];
                         }
                         
-                        // Update the count display based on whether we're filtering
-                        const selectedChromosome = $('#chromosome-filter').val();
-                        if (selectedChromosome) {
-                            $('#results-count').text('Showing ' + json.recordsFiltered + ' results for ' + selectedChromosome + ' (from ' + json.recordsTotal + ' total)');
-                        } else {
-                            $('#results-count').text('Found ' + json.recordsTotal + ' results');
-                        }
-                        
+                        $('#results-count').text('Found ' + json.recordsTotal + ' results');
                         return json.data;
                     }
                 },
@@ -314,8 +273,6 @@
                     }
                 ],
                 language: {
-                    search: "Filter results:",
-                    searchPlaceholder: "Type to filter...",
                     lengthMenu: "Show _MENU_ entries per page",
                     info: "Showing _START_ to _END_ of _TOTAL_ entries",
                     paginate: {
@@ -333,16 +290,6 @@
                     // Hide loading indicator and show table
                     $('#loading-indicator').hide();
                     $('#results-table').show();
-                    
-                    // Add event listener to the chromosome filter
-                    $('#chromosome-filter').off('change').on('change', function() {
-                        const selectedValue = $(this).val();
-                        console.log('Chromosome filter changed to:', selectedValue);
-                        
-                        // Reload the table with the new filter
-                        // This will trigger a new server request with the chromosome parameter
-                        table.ajax.reload();
-                    });
                 }
             });
         });
@@ -353,8 +300,6 @@
         params.append('query', document.getElementById('search-input') ? document.getElementById('search-input').value : '');
         const species = document.querySelector('input[name="species"]:checked') ? document.querySelector('input[name="species"]:checked').value : 'human';
         params.append('species', species);
-        const chromosome = document.getElementById('chromosome-filter') ? document.getElementById('chromosome-filter').value : '';
-        if (chromosome) params.append('chromosome', chromosome);
         window.location.href = '/api/tfbs/download/?' + params.toString();
     });
     </script>
