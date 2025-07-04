@@ -1,12 +1,14 @@
-from django.shortcuts import render
+from django.shortcuts import render, redirect
 from django.db import connections
 from django.conf import settings
-import re, traceback
+import re, traceback, io
 from rest_framework import viewsets, status
 from rest_framework.response import Response
 from .serializers import TFBSSerializer
 import csv
 from django.http import HttpResponse
+from django.contrib import messages
+from django.urls import reverse
 
 def index(request):
     context = {
@@ -595,3 +597,254 @@ def evaluation_metrics(request):
     View function for the evaluation metrics explanation page.
     """
     return render(request, 'pages/evaluation_metrics.html')
+
+def batch_search(request):
+    """
+    Handle file upload and batch search for multiple TF names and regions.
+    """
+    if request.method == 'POST':
+        if 'search_file' not in request.FILES:
+            messages.error(request, 'No file uploaded. Please select a file.')
+            return redirect('index')
+        
+        file = request.FILES['search_file']
+        species = request.POST.get('species', 'human')
+        
+        if file.size > 10 * 1024 * 1024:  # 10MB limit
+            messages.error(request, 'File size too large. Please keep files under 10MB.')
+            return redirect('index')
+        
+        try:
+            # Read file content
+            file_content = file.read().decode('utf-8')
+            queries = parse_batch_file(file_content)
+            
+            if not queries:
+                messages.error(request, 'No valid search terms found in the file.')
+                return redirect('index')
+            
+            if len(queries) > 1000:  # Limit number of queries
+                messages.error(request, 'Too many search terms. Please limit to 1000 queries per file.')
+                return redirect('index')
+            
+            # Store file content in session for batch processing
+            request.session['batch_file_content'] = file_content
+            
+            # Process batch search and redirect to results
+            return redirect(f"{reverse('batch_results')}?species={species}&query_count={len(queries)}")
+            
+        except Exception as e:
+            messages.error(request, f'Error processing file: {str(e)}')
+            return redirect('index')
+    
+    return redirect('index')
+
+def batch_results(request):
+    """
+    Display batch search results page.
+    """
+    species = request.GET.get('species', 'human')
+    query_count = request.GET.get('query_count', 0)
+    
+    context = {
+        'species': species,
+        'query_count': query_count,
+        'is_batch_search': True,
+        'columns': [
+            {'name': 'Query', 'key': 'query'},
+            {'name': 'Chromosome', 'key': 'seqnames'},
+            {'name': 'Start', 'key': 'start'},
+            {'name': 'End', 'key': 'end'},
+            {'name': 'Match Type', 'key': 'match_type'},
+        ]
+    }
+    return render(request, 'pages/batch_results.html', context)
+
+class BatchTFBSViewSet(viewsets.ViewSet):
+    """
+    API endpoint for batch search processing.
+    """
+    def list(self, request):
+        file_content = request.session.get('batch_file_content', '')
+        species = request.query_params.get('species', 'human')
+        draw = int(request.query_params.get('draw', 1))
+        
+        if not file_content:
+            return Response({
+                'draw': draw,
+                'recordsTotal': 0,
+                'recordsFiltered': 0,
+                'data': []
+            })
+        
+        try:
+            queries = parse_batch_file(file_content)
+            all_results = process_batch_search_full(queries, species, request)
+            results = process_batch_search(queries, species, request)
+            
+            return Response({
+                'draw': draw,
+                'recordsTotal': len(all_results),
+                'recordsFiltered': len(all_results),
+                'data': results
+            })
+            
+        except Exception as e:
+            error_details = traceback.format_exc()
+            print(f"Error in BatchTFBSViewSet: {str(e)}")
+            print(f"Traceback: {error_details}")
+            
+            return Response({
+                'draw': draw,
+                'recordsTotal': 0,
+                'recordsFiltered': 0,
+                'data': [],
+                'error': str(e),
+                'details': error_details if settings.DEBUG else "See server logs for details"
+            }, status=status.HTTP_200_OK)
+
+def parse_batch_file(file_content):
+    """
+    Parse uploaded file content to extract search queries.
+    Supports both CSV and plain text formats.
+    """
+    queries = []
+    lines = file_content.strip().split('\n')
+    
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith('#'):  # Skip empty lines and comments
+            continue
+        
+        # Handle CSV format (take first column)
+        if ',' in line and not is_genomic_location(line):
+            parts = line.split(',')
+            query = parts[0].strip()
+        else:
+            query = line
+        
+        if query:
+            queries.append(query)
+    
+    return queries
+
+def process_batch_search_full(queries, species, request):
+    """
+    Process multiple search queries and return all results (for counting).
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    all_results = []
+    
+    for query in queries:
+        try:
+            if is_genomic_location(query):
+                chrom, start, end = parse_genomic_location(query)
+                results, _ = search_by_location(db_alias, chrom, start, end, request, no_pagination=True)
+                match_type = 'Genomic Region'
+            else:
+                results, _ = search_by_tf_name(db_alias, query, request, no_pagination=True)
+                match_type = 'TF Name'
+            
+            # Add query info and match type to results
+            for result in results:
+                result['query'] = query
+                result['match_type'] = match_type
+                result['actions'] = f"/tfbs-details/{result['ID']}/?species={species}"
+                all_results.append(result)
+                
+        except Exception as e:
+            print(f"Error processing query '{query}': {str(e)}")
+            # Add error result
+            all_results.append({
+                'query': query,
+                'seqnames': 'Error',
+                'start': 'N/A',
+                'end': 'N/A',
+                'match_type': 'Error',
+                'ID': 'N/A',
+                'actions': 'N/A'
+            })
+    
+    return all_results
+
+def process_batch_search(queries, species, request):
+    """
+    Process multiple search queries and return paginated results.
+    """
+    db_alias = 'human' if species == 'human' else 'mouse'
+    all_results = []
+    
+    # Get pagination parameters
+    offset = int(getattr(request, 'query_params', request.GET).get('start', 0))
+    limit = int(getattr(request, 'query_params', request.GET).get('length', 25))
+    
+    for query in queries:
+        try:
+            if is_genomic_location(query):
+                chrom, start, end = parse_genomic_location(query)
+                results, _ = search_by_location(db_alias, chrom, start, end, request, no_pagination=True)
+                match_type = 'Genomic Region'
+            else:
+                results, _ = search_by_tf_name(db_alias, query, request, no_pagination=True)
+                match_type = 'TF Name'
+            
+            # Add query info and match type to results
+            for result in results:
+                result['query'] = query
+                result['match_type'] = match_type
+                result['actions'] = f"/tfbs-details/{result['ID']}/?species={species}"
+                all_results.append(result)
+                
+        except Exception as e:
+            print(f"Error processing query '{query}': {str(e)}")
+            # Add error result
+            all_results.append({
+                'query': query,
+                'seqnames': 'Error',
+                'start': 'N/A',
+                'end': 'N/A',
+                'match_type': 'Error',
+                'ID': 'N/A',
+                'actions': 'N/A'
+            })
+    
+    # Apply pagination to combined results
+    paginated_results = all_results[offset:offset + limit]
+    
+    return paginated_results
+
+def download_batch_results(request):
+    """
+    Download batch search results as CSV.
+    """
+    file_content = request.session.get('batch_file_content', '')
+    species = request.GET.get('species', 'human')
+    
+    if not file_content:
+        return HttpResponse("No batch search data available", status=400)
+    
+    try:
+        queries = parse_batch_file(file_content)
+        results = process_batch_search_full(queries, species, request)
+        
+        # Create CSV response
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="batch_search_results.csv"'
+        writer = csv.writer(response)
+        
+        if results:
+            writer.writerow(['Query', 'Chromosome', 'Start', 'End', 'Match Type', 'ID'])
+            for row in results:
+                writer.writerow([
+                    row.get('query', ''),
+                    row.get('seqnames', ''),
+                    row.get('start', ''),
+                    row.get('end', ''),
+                    row.get('match_type', ''),
+                    row.get('ID', '')
+                ])
+        
+        return response
+        
+    except Exception as e:
+        return HttpResponse(f"Error generating CSV: {str(e)}", status=500)

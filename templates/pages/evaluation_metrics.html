@@ -70,16 +70,15 @@
 <body>
     <div class="container">
         <header class="mb-4">
-            <h1 class="section-title">Understanding TFBS Evaluation Metrics</h1>
-            <p class="lead">Learn how we evaluate and score Transcription Factor Binding Sites (TFBS) in our database.</p>
+            <h1 class="section-title">TFBS Evaluation Metrics</h1>
         </header>
 
         <!-- Introduction Section -->
         <div class="section">
             <h2 class="subsection-title">Introduction</h2>
             <p>
-                Our database uses two key metrics to evaluate TFBS regions: the Confident Score and the Important Score. 
-                These scores help researchers assess the reliability and biological significance of predicted TFBS regions.
+                TFBSpedia uses two key metrics to evaluate a single transcription factor binding site (TFBS) region: the Confident Score and the Important Score. 
+                These scores help researchers assess the reliability and biological significance of a predicted TFBS region.
             </p>
         </div>
 
@@ -87,26 +86,31 @@
         <div class="section">
             <h2 class="subsection-title">Confident Score</h2>
             <div class="metric-card">
-                <h3>What is the Confident Score?</h3>
                 <p>
                     The Confident Score measures the reliability of a TFBS prediction, indicating how confident we are 
                     that the region represents a true transcription factor binding site.
                 </p>
-                <p class="score-range">Score Range: 0-8</p>
-                
-                <h4 class="mt-4">Calculation Criteria:</h4>
-                <ul class="criteria-list">
-                    <li>• [Criterion 1] - Description of how this criterion affects the score</li>
-                    <li>• [Criterion 2] - Description of how this criterion affects the score</li>
-                    <li>• [Criterion 3] - Description of how this criterion affects the score</li>
-                </ul>
+                <p class="score-range">Score Range: 0-8</p>    
+<h4 class="mt-4">Calculation formula:</h4>
+
+            <p>
+        <span style="color: #6a1b9a; font-weight: bold;">Confident Score</span> = <span style="color: #6a1b9a;">Number of sources that support the TFBS prediction </span>  + <span style="color: #6a1b9a;">Number of sequencing techniques that support the TFBS prediction</span>
+                    <br>
+                    <br>
+                    Five sources are considered: <u>UM, factorbook, RegulomeDB, Unibind, ENCODE footprint</u>
+                    <br>
+                    <br>
+                    Three sequencing techniques are considered: <u>ChIP-seq, ATAC-seq, and DNase-seq</u>
+                    <br>
+                    <br>
+                </p>
 
                 <div class="example-box">
-                    <h5>Example Interpretation:</h5>
+                    <h5>Interpretation:</h5>
                     <ul>
-                        <li>Score 7-8: Highly confident prediction</li>
-                        <li>Score 4-6: Moderately confident prediction</li>
-                        <li>Score 0-3: Low confidence prediction</li>
+                        <li>Score 5-8: Highly confident prediction</li>
+                        <li>Score 3-4: Moderately confident prediction</li>
+                        <li>Score 0-2: Low confidence prediction</li>
                     </ul>
                 </div>
             </div>
@@ -116,44 +120,28 @@
         <div class="section">
             <h2 class="subsection-title">Important Score</h2>
             <div class="metric-card">
-                <h3>What is the Important Score?</h3>
                 <p>
                     The Important Score evaluates the biological significance of a TFBS region, considering various 
-                    factors that indicate its potential role in gene regulation.
+                    existed annotations that indicate its potential role in gene regulation.
                 </p>
                 <p class="score-range">Score Range: 0-7</p>
 
-                <h4 class="mt-4">Calculation Criteria:</h4>
-                <ul class="criteria-list">
-                    <li>• [Criterion 1] - Description of how this criterion affects the score</li>
-                    <li>• [Criterion 2] - Description of how this criterion affects the score</li>
-                    <li>• [Criterion 3] - Description of how this criterion affects the score</li>
-                </ul>
+            <h4 class="mt-4">Calculation formula:</h4>
+            <p>
+<span style="color: #6a1b9a; font-weight: bold;">Important Score</span> = <span style="color: #6a1b9a;">TFBS in annotated regulatory elements(promoter, enhancers)</span>  + <span style="color: #6a1b9a;">DNA methylation changes across tissues</span> + <span style="color: #6a1b9a;">Cookbook annotations</span>+ <span style="color: #6a1b9a;"> a variant(GWAS, eQTL)</span>+ <span style="color: #6a1b9a;"> a histone modification peak</span>
++ <span style="color: #6a1b9a;">an ENCODE annotation(cCREs,rE2G)</span>+ <span style="color: #6a1b9a;">in a Transposable element</span> - <span style="color: #6a1b9a;">in the ENCODE blacklist</span>
+                    <br>
+                    <br>
+                    <br>
+                </p>
 
                 <div class="example-box">
                     <h5>Example Interpretation:</h5>
                     <ul>
-                        <li>Score 6-7: Highly important region</li>
-                        <li>Score 3-5: Moderately important region</li>
+                        <li>Score 5-7: Highly important region</li>
+                        <li>Score 3-4: Moderately important region</li>
                         <li>Score 0-2: Low importance region</li>
                     </ul>
                 </div>
             </div>
         </div>
-
-        <!-- How to Use Section -->
-        <div class="section">
-            <h2 class="subsection-title">How to Use These Scores</h2>
-            <p>
-                When analyzing TFBS regions, consider both scores together:
-            </p>
-            <ul class="criteria-list">
-                <li>• High Confident Score + High Important Score: Strong candidate for experimental validation</li>
-                <li>• High Confident Score + Low Important Score: Reliable prediction but may be less biologically relevant</li>
-                <li>• Low Confident Score + High Important Score: May warrant further investigation despite lower confidence</li>
-                <li>• Low Confident Score + Low Important Score: May be less reliable or significant</li>
-            </ul>
-        </div>
-    </div>
-</body>
-</html> 

@@ -87,7 +87,12 @@
                     </div>
                 </div>
                 <div class="col-md-12">
-                    <div class="score-label">Important Score (max: 7)</div>
+                    <div class="score-label">
+                        Important Score (max: 7)
+                        <a href="{% url 'evaluation_metrics' %}" class="btn btn-sm btn-outline-secondary ms-2" target="_blank">
+                            Learn more about scores
+                        </a>
+                    </div>
                     <div class="position-relative">
                         <div class="score-bar" id="important-score-bar"></div>
                         {% if important_score %}

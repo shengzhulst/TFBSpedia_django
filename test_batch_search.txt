@@ -1,0 +1,12 @@
+# Example batch search file
+# This file contains multiple TF names and genomic regions
+# Each line should contain one search term
+
+FOXP3
+CTCF
+MYC
+chr1,10000,20000
+chr2,50000,60000
+GATA1
+NFkB
+chr5,100000,150000
