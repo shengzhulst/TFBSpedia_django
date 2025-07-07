@@ -1,12 +1,34 @@
-# Example batch search file
+# Example batch search file for optimized batch processing
 # This file contains multiple TF names and genomic regions
 # Each line should contain one search term
+# Comments (lines starting with #) are ignored
 
+# Transcription Factor Names
 FOXP3
 CTCF
 MYC
-chr1,10000,20000
-chr2,50000,60000
 GATA1
 NFkB
+TP53
+JUN
+FOS
+STAT3
+CREB1
+
+# Genomic Regions (chromosome,start,end)
+chr1,10000,20000
+chr2,50000,60000
+chr3,75000,85000
 chr5,100000,150000
+chr6,200000,250000
+chr7,300000,350000
+chr10,400000,450000
+
+# Chromosome-only searches
+chr11
+chr12
+
+# Additional TF names
+SOX2
+OCT4
+NANOG

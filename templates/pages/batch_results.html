@@ -102,7 +102,7 @@
         
         <div class="search-info">
             <h2>Batch Search Results for {{ species|title }} database</h2>
-            <p id="results-count">Processing {{ query_count }} search queries...</p>
+            <p id="results-count">Processing {{ query_count }} search queries with optimized batch SQL...</p>
         </div>
         
         <div class="batch-actions">
@@ -223,11 +223,9 @@
                     }
                 },
                 columns: [
-                    { data: 'query', title: 'Query', defaultContent: '-' },
                     { data: 'seqnames', title: 'Chromosome', defaultContent: '-' },
                     { data: 'start', title: 'Start', defaultContent: '-' },
                     { data: 'end', title: 'End', defaultContent: '-' },
-                    { data: 'match_type', title: 'Match Type', defaultContent: '-' },
                     { 
                         data: 'actions',
                         title: 'Actions',
