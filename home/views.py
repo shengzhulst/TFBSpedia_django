@@ -597,13 +597,20 @@ def batch_search_by_tf_name(db_alias, tf_names, request=None, no_pagination=Fals
     Batch search for multiple TF names using the same pattern as search_by_tf_name.
     """
     if not tf_names:
-        return []
+        return [], 0
     print(tf_names)
     try:
         with connections[db_alias].cursor() as cursor:
             # Create placeholders for the IN clause
             placeholders = ','.join(['%s'] * len(tf_names))
-            
+            # Get total count for all TF names
+            cursor.execute(f"""
+                SELECT all_count, tfbs_count, predicted_tfbs_count
+                FROM tfbs_name_counts
+                WHERE tfbs IN ({placeholders})
+            """, tf_names)
+            total_count = cursor.fetchone()
+            total_count=sum(total_count)
             if no_pagination:
                 # Get all results (limited to prevent explosion)
                 cursor.execute(f"""
@@ -619,7 +626,6 @@ def batch_search_by_tf_name(db_alias, tf_names, request=None, no_pagination=Fals
                         WHERE n."ID" = p."ID" 
                         AND (n."TFBS" IN ({placeholders}) OR n."predicted_TFBS" IN ({placeholders}))
                     )
-                    ORDER BY p."seqnames", p."start"
                 """, tf_names + tf_names)
             else:
                 # Get paginated results
@@ -639,7 +645,6 @@ def batch_search_by_tf_name(db_alias, tf_names, request=None, no_pagination=Fals
                         WHERE n."ID" = p."ID" 
                         AND (n."TFBS" IN ({placeholders}) OR n."predicted_TFBS" IN ({placeholders}))
                 )
-                ORDER BY p."seqnames", p."start"
                 OFFSET %s LIMIT %s
             """, tf_names + tf_names + [offset, limit])
                 print('test end')
@@ -653,7 +658,7 @@ def batch_search_by_tf_name(db_alias, tf_names, request=None, no_pagination=Fals
                 if key not in seen:
                     seen.add(key)
                     results.append(row)
-            return results
+            return results, total_count
             
     except Exception as e:
         print(f"Database error in batch_search_by_tf_name: {str(e)}")
@@ -661,12 +666,13 @@ def batch_search_by_tf_name(db_alias, tf_names, request=None, no_pagination=Fals
 
 def batch_search_by_location(db_alias, locations, request=None, no_pagination=False):
     """
-    Optimized batch search for multiple genomic locations using OR conditions.
+    Batch search for multiple genomic locations using the same pattern as search_by_location.
     locations: list of tuples [(chromosome, start, end), ...]
     """
     if not locations:
-        return []
+        return [], 0
     
+    print(locations)
     try:
         with connections[db_alias].cursor() as cursor:
             # Get pagination parameters if not no_pagination
@@ -677,7 +683,7 @@ def batch_search_by_location(db_alias, locations, request=None, no_pagination=Fa
                 offset = 0
                 limit = 25
             
-            # Separate chromosome-only and region searches for optimal querying
+            # Separate chromosome-only and region searches
             chr_only_searches = []
             region_searches = []
             
@@ -687,59 +693,77 @@ def batch_search_by_location(db_alias, locations, request=None, no_pagination=Fa
                 else:
                     region_searches.append((chromosome, start, end))
             
+            # Get total count
+            total_count = 0
+            
+            # Count chromosome-only searches
+            if chr_only_searches:
+                chr_placeholders = ','.join(['%s'] * len(chr_only_searches))
+                cursor.execute(f"""
+                    SELECT COUNT(*) 
+                    FROM "TFBS_position"
+                    WHERE "seqnames" IN ({chr_placeholders})
+                """, chr_only_searches)
+                chr_count = cursor.fetchone()[0]
+                total_count += chr_count
+            
+            # Count region searches
+            for chromosome, start, end in region_searches:
+                cursor.execute("""
+                    SELECT COUNT(*) 
+                    FROM "TFBS_position"
+                    WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
+                """, [chromosome, start, end])
+                region_count = cursor.fetchone()[0]
+                total_count += region_count
+            
+            # Get results
             all_results = []
             
             # Handle chromosome-only searches
             if chr_only_searches:
                 chr_placeholders = ','.join(['%s'] * len(chr_only_searches))
-                query = f"""
-                    SELECT DISTINCT "ID", "seqnames", "start", "end"
-                    FROM "TFBS_position"
-                    WHERE "seqnames" IN ({chr_placeholders})
-                    ORDER BY "seqnames", "start"
-                """
-                
-                if not no_pagination:
-                    query += f" OFFSET {offset} LIMIT {limit}"
-                
-                cursor.execute(query, chr_only_searches)
+                if no_pagination:
+                    cursor.execute(f"""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" IN ({chr_placeholders})
+                        ORDER BY "seqnames", "start"
+                    """, chr_only_searches)
+                else:
+                    cursor.execute(f"""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" IN ({chr_placeholders})
+                        ORDER BY "seqnames", "start"
+                        OFFSET %s LIMIT %s
+                    """, chr_only_searches + [offset, limit])
                 
                 columns = [col[0] for col in cursor.description]
                 chr_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
                 all_results.extend(chr_results)
             
-            # Handle region searches in batches to avoid overly complex queries
-            batch_size = 50  # Process regions in batches of 50
-            for i in range(0, len(region_searches), batch_size):
-                batch = region_searches[i:i + batch_size]
-                
-                # Build OR conditions for this batch
-                or_conditions = []
-                params = []
-                
-                for chromosome, start, end in batch:
-                    or_conditions.append("""
-                        ("seqnames" = %s AND "start" >= %s AND "end" <= %s)
-                    """)
-                    params.extend([chromosome, start, end])
-                
-                if or_conditions:
-                    query = f"""
-                        SELECT DISTINCT "ID", "seqnames", "start", "end"
+            # Handle region searches
+            for chromosome, start, end in region_searches:
+                if no_pagination:
+                    cursor.execute("""
+                        SELECT "ID", "seqnames", "start", "end"
                         FROM "TFBS_position"
-                        WHERE {' OR '.join(or_conditions)}
-                        ORDER BY "seqnames", "start"
-                    """
-                    
-                    if no_pagination:
-                        query += " LIMIT 10000"
-                    else:
-                        query += f" OFFSET {offset} LIMIT {limit}"
-                    
-                    cursor.execute(query, params)
-                    columns = [col[0] for col in cursor.description]
-                    batch_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
-                    all_results.extend(batch_results)
+                        WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
+                        ORDER BY "start"
+                    """, [chromosome, start, end])
+                else:
+                    cursor.execute("""
+                        SELECT "ID", "seqnames", "start", "end"
+                        FROM "TFBS_position"
+                        WHERE "seqnames" = %s AND "start" >= %s AND "end" <= %s
+                        ORDER BY "start"
+                        OFFSET %s LIMIT %s
+                    """, [chromosome, start, end, offset, limit])
+                
+                columns = [col[0] for col in cursor.description]
+                region_results = [dict(zip(columns, row)) for row in cursor.fetchall()]
+                all_results.extend(region_results)
             
             # Remove duplicates from combined results
             seen = set()
@@ -750,7 +774,7 @@ def batch_search_by_location(db_alias, locations, request=None, no_pagination=Fa
                     seen.add(key)
                     results.append(row)
             
-            return results
+            return results, total_count
             
     except Exception as e:
         print(f"Database error in batch_search_by_location: {str(e)}")
@@ -857,19 +881,22 @@ class BatchTFBSViewSet(viewsets.ViewSet):
                 else:
                     tf_names.append(query)
             
-            # Execute batch searches
+            # Execute batch searches (no pagination to get all results)
             all_results = []
+            total_count = 0
             
             # Process TF names in batch
             if tf_names:
-                tf_results = batch_search_by_tf_name(db_alias, tf_names, request)
+                tf_results, tf_total_count = batch_search_by_tf_name(db_alias, tf_names, request, no_pagination=False)
+                total_count += tf_total_count
                 for result in tf_results:
                     result['actions'] = f"/tfbs-details/{result['ID']}/?species={species}"
                     all_results.append(result)
             
             # Process genomic locations in batch
             if locations:
-                location_results = batch_search_by_location(db_alias, locations, request)
+                location_results, location_total_count = batch_search_by_location(db_alias, locations, request, no_pagination=False)
+                total_count += location_total_count
                 for result in location_results:
                     result['actions'] = f"/tfbs-details/{result['ID']}/?species={species}"
                     all_results.append(result)
@@ -877,8 +904,8 @@ class BatchTFBSViewSet(viewsets.ViewSet):
             # Format response for DataTables
             return Response({
                 'draw': draw,
-                'recordsTotal': len(all_results),
-                'recordsFiltered': len(all_results),
+                'recordsTotal': total_count,
+                'recordsFiltered': total_count,
                 'data': all_results
             })
             
@@ -902,6 +929,11 @@ def parse_batch_file(file_content):
     Supports both CSV and plain text formats.
     """
     queries = []
+    
+    # Remove UTF-8 BOM if present
+    if file_content.startswith('\ufeff'):
+        file_content = file_content[1:]
+    
     lines = file_content.strip().split('\n')
     
     for line in lines:
@@ -909,16 +941,33 @@ def parse_batch_file(file_content):
         if not line or line.startswith('#'):  # Skip empty lines and comments
             continue
         
-        # Handle CSV format (take first column)
-        if ',' in line and not is_genomic_location(line):
-            parts = line.split(',')
-            query = parts[0].strip()
-        else:
-            query = line
-        
-        if query:
-            queries.append(query)
+        # Clean up the line (remove any remaining BOM or special characters)
+        if line:
+            # Remove any leading/trailing whitespace and special characters
+            clean_line = line.strip()
+            # Remove any remaining BOM characters
+            if clean_line.startswith('\ufeff'):
+                clean_line = clean_line[1:].strip()
+            
+            # Remove trailing commas
+            clean_line = clean_line.rstrip(',')
+            
+            if clean_line:  # Only process non-empty lines
+                # Check if this is a genomic location first (after cleaning)
+                if is_genomic_location(clean_line):
+                    # It's a genomic location, use as-is
+                    queries.append(clean_line)
+                elif ',' in clean_line:
+                    # It's CSV format, take first column
+                    parts = clean_line.split(',')
+                    csv_query = parts[0].strip()
+                    if csv_query:
+                        queries.append(csv_query)
+                else:
+                    # It's a plain text query
+                    queries.append(clean_line)
     
+    print(queries)
     return queries
 
 def download_batch_results(request):
@@ -953,12 +1002,12 @@ def download_batch_results(request):
         
         # Process TF names in batch
         if tf_names:
-            tf_results = batch_search_by_tf_name(db_alias, tf_names, request, no_pagination=True)
+            tf_results, _ = batch_search_by_tf_name(db_alias, tf_names, request, no_pagination=True)
             all_results.extend(tf_results)
         
         # Process genomic locations in batch
         if locations:
-            location_results = batch_search_by_location(db_alias, locations, request, no_pagination=True)
+            location_results, _ = batch_search_by_location(db_alias, locations, request, no_pagination=True)
             all_results.extend(location_results)
         
         # Create CSV response
